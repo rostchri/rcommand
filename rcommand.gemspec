@@ -17,6 +17,6 @@ Gem::Specification.new do |gem|
   gem.test_files    = gem.files.grep(%r{^(test|spec|features)/})
   gem.require_paths = ["lib"]
   
-  gem.add_dependency "net-ssh"
-  gem.add_dependency "net-ssh-gateway"
+  # gem.add_dependency "net-ssh"
+  # gem.add_dependency "net-ssh-gateway"
 end
