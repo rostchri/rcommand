@@ -19,4 +19,5 @@ Gem::Specification.new do |gem|
   
   gem.add_dependency "net-ssh"
   gem.add_dependency "net-ssh-gateway"
+  gem.add_dependency "dslblock"
 end
