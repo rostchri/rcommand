@@ -75,6 +75,11 @@ module RCommand
         printf("### ERROR: %s [%s]\n%s\n",ex.message, ex.class, ex.backtrace.join("\n"))
       end
     end
-    
   end
+  
+  
+  def rcommand(options={}, &block)
+    SSH.new(options.merge!({}),&block)
+  end
+  
 end
