@@ -32,7 +32,9 @@ module RCommand
     end
     
     def execute
-      Net::SSH.start(host, username) do |ssh|
+      #:verbose => Logger::ERROR
+      sshopts = [host, username]
+      Net::SSH.start(sshopts*) do |ssh|
         # open a new channel and configure a minimal set of callbacks, then run
         # the event loop until the channel finishes (closes)
         channel = ssh.open_channel do |ch|
