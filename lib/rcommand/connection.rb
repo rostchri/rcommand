@@ -25,7 +25,7 @@ module RCommand
     
     # adding new command
     def add_command(options = {}, &block)
-      command = Command.new(options.merge!({:parent => self}), &block)
+      command = Command.new(options.merge!({}), &block)
       commands[command.id] = command
     end
     
