@@ -34,7 +34,7 @@ module RCommand
     def execute
       sshopts = [host, username]
       sshopts << password unless password.nil? || password.empty? 
-      sshopts << :verbose => Logger::ERROR
+      sshopts << {:verbose => Logger::ERROR}
       Net::SSH.start(sshopts*) do |ssh|
         # open a new channel and configure a minimal set of callbacks, then run
         # the event loop until the channel finishes (closes)
