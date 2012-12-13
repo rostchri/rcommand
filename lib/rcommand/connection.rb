@@ -19,7 +19,7 @@ module RCommand
     # adding new command
     def add_command(options = {}, &block)
       command = Command.new(options.merge!({:parent => self}), &block)
-      commands[node.id] = node
+      commands[command.id] = command
     end
     
     def ssh_execute(hostname,precmds,cmds,direct=false)
