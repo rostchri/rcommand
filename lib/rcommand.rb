@@ -1,5 +1,6 @@
 require "rcommand/version"
 require "rcommand/connection"
+require "rcommand/group"
 require "rcommand/command"
 
 

@@ -5,113 +5,84 @@ require 'dslblock'
 module RCommand
     
   class Connection < DSLBlock::UniversalItem
-    attr_accessor :host, :username, :password, :commands
+    attr_accessor :host, :username, :password, :groups
     
     def initialize(options={},&block)
       # set some default options
-      # options = options.reverse_merge :show  => false
+      options = options.reverse_merge :wait => true
       # set some instance-variables according to option-values
       set :host      => options.delete(:host),
           :username  => options.delete(:username),
           :password  => options.delete(:password),
-          :commands  => {}
+          :groups    => {}
       super
     end
     
     def to_s(opts={})
-      opts = opts.reverse_merge :include_children => false
+      opts = opts.reverse_merge :include_children => true
       res = "#{self.class.name}: ##{id} #{username}@#{host} depth: #{depth} options: #{options}"
-      commands.each { |id,command| res += "\n#{(depth+1).times.map {"\t"}.join("")}#{command.to_s(opts)}" } if opts[:include_children]
+      groups.each { |id,group| res += "\n#{(depth+1).times.map {"\t"}.join("")}#{group.to_s(opts)}" } if opts[:include_children]
       res
     end
     
-    # adding new command
-    def add_command(options = {}, &block)
-      command = Command.new(options.merge!({}), &block)
-      commands[command.id] = command
+    # adding new sequential command group
+    def sequential_commands(options = {}, &block)
+      group = Group.new(options.merge!({:order => :sequential}), &block)
+      groups[group.id] = group
+    end
+
+    # adding new parallel command group
+    def parallel_commands(options = {}, &block)
+      group = Group.new(options.merge!({:order => :parallel}), &block)
+      groups[group.id] = group
     end
     
-    def execute
-      sshopts = [host, username]
-      sshopts << password unless password.nil? || password.empty? 
-      sshopts << {:verbose => Logger::ERROR}
-      Net::SSH.start(sshopts*) do |ssh|
-        # open a new channel and configure a minimal set of callbacks, then run
-        # the event loop until the channel finishes (closes)
-        channel = ssh.open_channel do |ch|
-          ch.exec "hostname" do |ch, success|
-            raise "could not execute command" unless success
-            ch.on_data do |c, data| # "on_data" is called when the process writes something to stdout
-              $STDOUT.printf "%p %p\n", c, data
+    def processing_ssh_connection(ssh)
+      # open a new channel and configure a minimal set of callbacks, then run
+      # the event loop until the channel finishes (closes)
+      groups.each do |id,group|
+        group.commands.each do |id,command|
+          puts command.cmdline
+          channel = ssh.open_channel do |ch|
+            ch.exec command.cmdline do |ch, success|
+              raise "could not execute command: #{command.cmdline}" unless success
+              ch.on_data do |c, data| # "on_data" is called when the process writes something to stdout
+                printf "STDOUT (#%p/%p): %p\n", c.local_id, c.remote_id, data
+              end
+              ch.on_extended_data do |c, type, data| # "on_extended_data" is called when the process writes something to stderr
+                printf "STDERR[%p] (#%p/%p): %p\n", type, c.local_id, c.remote_id, data
+              end
+              ch.on_close do |c|
+                printf  "### INFO: channel #%p/%p closed\n", c.local_id, c.remote_id 
+              end
             end
-            ch.on_extended_data do |c, type, data| # "on_extended_data" is called when the process writes something to stderr
-              $STDERR.printf "%p %p %p\n", c, type, data
-            end
-            ch.on_close { puts "done!" }
           end
+          channel.wait if group.options[:order] == :sequential
         end
-        channel.wait
       end
     end
     
-    def oldexecute(hostname,precmds,cmds,direct=false)
-      cache_last = []
+    def execute
+      hostopts = {:verbose => Logger::ERROR}
+      hostopts.merge!({:password => password}) unless password.nil? || password.empty? 
+      hostargs = [host, username, hostopts]
+      unless options[:gateway].nil?
+        gatewayopts = {:verbose => Logger::ERROR}
+        gatewayopts.merge!({:password => options[:gateway][:password]}) unless options[:gateway][:password].nil? || options[:gateway][:password].empty? 
+        gatewayargs = [options[:gateway][:host], options[:gateway][:username], gatewayopts]
+      end
       begin
-        gateway = Net::SSH::Gateway.new('dskinst001', 'root', :verbose => Logger::ERROR)
-        gateway.ssh(hostname, "root", {:verbose => Logger::ERROR} ) do |ssh|
-
-          precmds.each_with_index do |command,index|
-            yield index, ssh.exec!(command)
-          end
-
-          cmds.each do |command|
-            ssh.open_channel do |channel|
-
-              # stderr
-              channel.on_extended_data do |channel,type,data|
-                data.each_line { |l| printf("### STD-ERROR @%d [CMD: %s]  %s\n", channel.local_id + precmds.size , command , l.chop) } if type==1 
-              end
-
-              # stdout
-              channel.on_data do |channel,data|
-                if data[-1] == "\n"
-                  if cache_last[channel.local_id]
-                    if direct==false
-                      cache_last[channel.local_id]+=data
-                    else
-                      yield channel.local_id, cache_last[channel.local_id] + data
-                      cache_last[channel.local_id] = nil
-                    end 
-                  else
-                    if direct==false
-                      cache_last[channel.local_id] = data
-                    else
-                      yield channel.local_id, data
-                    end 
-                  end
-                else
-                  # Falls hinten kein \n so ist die Zeile nicht komplett übermittelt und muss als Präfix für die nächste Zeile gecached werden    
-                  cache_last[channel.local_id] ? cache_last[channel.local_id] += data : cache_last[channel.local_id] = data
-                end
-              end
-
-              # eof
-              channel.on_eof do |channel|
-                #printf("### EOF-CHAN: %d CMD: %s\n", channel.local_id, command)
-                yield channel.local_id, cache_last[channel.local_id] if direct==false
-              end
-
-              channel.exec command
-            end
-          end
+        unless options[:gateway].nil?
+          Net::SSH::Gateway.new(*gatewayargs).ssh(*hostargs) { |ssh| processing_ssh_connection(ssh) }
+        else
+          Net::SSH.start(*hostargs) { |ssh| processing_ssh_connection(ssh) }
         end
-        gateway.shutdown!
       rescue Net::SSH::HostKeyMismatch => e
-        puts "remembering new key: #{e.fingerprint}"
+        puts "### INFO: remembering new key: #{e.fingerprint}"
         e.remember_host!
         retry
       rescue Exception => ex
-        printf("### ERROR: %s [%s]\n%s\n",ex.message, ex.class, ex.backtrace.join("\n"))
+        printf "### ERROR in connection: %s@%s: %s [%s]\n%s\n", username, host, ex.message, ex.class, ex.backtrace.join("\n")
       end
     end
   end
