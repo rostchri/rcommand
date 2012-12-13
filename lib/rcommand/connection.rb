@@ -5,14 +5,15 @@ require 'dslblock'
 module RCommand
     
   class Connection < DSLBlock::UniversalItem
-    attr_accessor :host, :username, :commands
+    attr_accessor :host, :username, :password, :commands
     
     def initialize(options={},&block)
       # set some default options
       # options = options.reverse_merge :show  => false
       # set some instance-variables according to option-values
-      set :username  => options.delete(:username),
-          :host      => options.delete(:host),
+      set :host      => options.delete(:host),
+          :username  => options.delete(:username),
+          :password  => options.delete(:password),
           :commands  => {}
       super
     end
@@ -35,18 +36,16 @@ module RCommand
         # open a new channel and configure a minimal set of callbacks, then run
         # the event loop until the channel finishes (closes)
         channel = ssh.open_channel do |ch|
-          
           ch.exec "hostname" do |ch, success|
             raise "could not execute command" unless success
             ch.on_data do |c, data| # "on_data" is called when the process writes something to stdout
-              $STDOUT.print data
+              $STDOUT.printf "%p %p\n", c, data
             end
             ch.on_extended_data do |c, type, data| # "on_extended_data" is called when the process writes something to stderr
-              $STDERR.print data
+              $STDERR.printf "%p %p %p\n", c, type, data
             end
             ch.on_close { puts "done!" }
           end
-          
         end
         channel.wait
       end
