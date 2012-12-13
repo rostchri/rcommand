@@ -12,7 +12,7 @@ module RCommand
       # options = options.reverse_merge :show  => false
       # set some instance-variables according to option-values
       set :host      => options.delete(:host),
-          :commands  => {},
+          :commands  => {}
       super
     end
     
