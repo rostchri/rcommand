@@ -1,6 +1,4 @@
 require "rcommand/version"
-
-
 require "rcommand/ssh"
 
 

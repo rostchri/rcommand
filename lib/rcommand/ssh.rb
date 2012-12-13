@@ -3,6 +3,10 @@ require 'net/ssh/gateway'
 
 module RCommand
   
+  class Hallo
+    
+  end
+  
   class SSH < DSLBlock::UniversalItem
     attr_accessor :host, :commands
     
