@@ -1,12 +1,9 @@
 require 'net/ssh'
 require 'net/ssh/gateway'
+require 'dslblock'
 
 module RCommand
-  
-  class Hallo
     
-  end
-  
   class SSH < DSLBlock::UniversalItem
     attr_accessor :host, :commands
     
@@ -14,7 +11,7 @@ module RCommand
       # set some default options
       # options = options.reverse_merge :show  => false
       # set some instance-variables according to option-values
-      set :host     => options.delete(:host)
+      set :host => options.delete(:host)
       super
     end
     
