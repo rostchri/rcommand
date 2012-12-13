@@ -5,7 +5,7 @@ require 'rcommand/version'
 
 Gem::Specification.new do |gem|
   gem.name          = "rcommand"
-  gem.version       = Rcommand::VERSION
+  gem.version       = RCommand::VERSION
   gem.authors       = ["Christian Rost"]
   gem.email         = ["chr@baltic-online.de"]
   gem.description   = %q{Using ssh to execute some commands remotely}

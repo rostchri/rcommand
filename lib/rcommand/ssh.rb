@@ -1,7 +1,7 @@
 require 'net/ssh'
 require 'net/ssh/gateway'
 
-module Rcommand
+module RCommand
   
   class SSH < DSLBlock::UniversalItem
     attr_accessor :host, :commands

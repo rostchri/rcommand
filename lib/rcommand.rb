@@ -4,6 +4,6 @@ require "rcommand/version"
 require "rcommand/ssh"
 
 
-module Rcommand
+module RCommand
   # Your code goes here...
 end
