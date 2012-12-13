@@ -1,5 +1,6 @@
 require "rcommand/version"
-require "rcommand/ssh"
+require "rcommand/connection"
+require "rcommand/command"
 
 
 module RCommand
