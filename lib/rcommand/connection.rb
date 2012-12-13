@@ -4,15 +4,22 @@ require 'dslblock'
 
 module RCommand
     
-  class SSH < DSLBlock::UniversalItem
+  class Connection < DSLBlock::UniversalItem
     attr_accessor :host, :commands
     
     def initialize(options={},&block)
       # set some default options
       # options = options.reverse_merge :show  => false
       # set some instance-variables according to option-values
-      set :host => options.delete(:host)
+      set :host      => options.delete(:host),
+          :commands  => {},
       super
+    end
+    
+    # adding new command
+    def add_command(options = {}, &block)
+      command = Command.new(options.merge!({:parent => self}), &block)
+      commands[node.id] = node
     end
     
     def ssh_execute(hostname,precmds,cmds,direct=false)
@@ -79,7 +86,7 @@ module RCommand
   
   
   def rcommand(options={}, &block)
-    SSH.new(options.merge!({}),&block)
+    Connection.new(options.merge!({}),&block)
   end
   
 end
