@@ -16,6 +16,13 @@ module RCommand
       super
     end
     
+    def to_s(opts={})
+      opts = opts.reverse_merge :include_children => false
+      res = "#{self.class.name}: ##{id} host: #{host} depth: #{depth} options: #{options}"
+      commands.each { |id,command| res += "\n#{(depth+1).times.map {"\t"}.join("")}#{command.to_s(opts)}" } if opts[:include_children]
+      res
+    end
+    
     # adding new command
     def add_command(options = {}, &block)
       command = Command.new(options.merge!({:parent => self}), &block)
