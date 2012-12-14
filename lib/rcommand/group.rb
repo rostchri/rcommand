@@ -3,7 +3,10 @@ module RCommand
     attr_accessor :commands
     def initialize(options={},&block)
       # set some default options
-      options = options.reverse_merge :order => :sequential
+      options = options.reverse_merge :order  => :sequential,
+                                      :save   => false,
+                                      :stdout => false,
+                                      :stderr => false
       # set some instance-variables according to option-values
       set :commands  => {}
       super

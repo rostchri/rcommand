@@ -9,7 +9,11 @@ module RCommand
     
     def initialize(options={},&block)
       # set some default options
-      options = options.reverse_merge :wait => true
+      options = options.reverse_merge :debug  => false,
+                                      :save   => false,
+                                      :stdout => false,
+                                      :stderr => false
+                                     
       # set some instance-variables according to option-values
       set :host      => options.delete(:host),
           :username  => options.delete(:username),
@@ -20,49 +24,60 @@ module RCommand
     
     def to_s(opts={})
       opts = opts.reverse_merge :include_children => true
-      res = "#{self.class.name}: ##{id} #{username}@#{host} depth: #{depth} options: #{options}"
+      gateway = "[gw:#{options[:gateway][:username]}@#{options[:gateway][:host]}]" unless options[:gateway].nil? || options[:gateway][:username].nil? || options[:gateway][:host].nil?
+      res = "#{self.class.name}: ##{id} #{username}@#{host}#{gateway} depth: #{depth}  options: #{options}"
       groups.each { |id,group| res += "\n#{(depth+1).times.map {"\t"}.join("")}#{group.to_s(opts)}" } if opts[:include_children]
       res
     end
     
-    # adding new sequential command group
-    def sequential_commands(options = {}, &block)
-      group = Group.new(options.merge!({:order => :sequential}), &block)
+    # adding new command group with following possible options:
+    # :order  => :sequential (default)
+    # :order  => :parallel
+    def add_group(options = {}, &block)
+      group = Group.new(options, &block)
       groups[group.id] = group
     end
-
-    # adding new parallel command group
-    def parallel_commands(options = {}, &block)
-      group = Group.new(options.merge!({:order => :parallel}), &block)
-      groups[group.id] = group
-    end
+    
     
     def processing_ssh_connection(ssh)
       # open a new channel and configure a minimal set of callbacks, then run
       # the event loop until the channel finishes (closes)
       groups.each do |id,group|
         group.commands.each do |id,command|
-          puts command.cmdline
           channel = ssh.open_channel do |ch|
             ch.exec command.cmdline do |ch, success|
-              raise "could not execute command: #{command.cmdline}" unless success
-              ch.on_data do |c, data| # "on_data" is called when the process writes something to stdout
-                printf "STDOUT (#%p/%p): %p\n", c.local_id, c.remote_id, data
+              
+              if success
+                printf  "### DEBUG %10.10s [#%p/%p] executing: %s\n", command.id, ch.local_id, ch.remote_id, command.cmdline if debug?
+              else
+                raise "could not execute command: #{command.cmdline}"
               end
-              ch.on_extended_data do |c, type, data| # "on_extended_data" is called when the process writes something to stderr
-                printf "STDERR[%p] (#%p/%p): %p\n", type, c.local_id, c.remote_id, data
+              
+              # STDOUT-Channel
+              ch.on_data do |ch, data| # "on_data" is called when the process writes something to stdout
+                command.process_raw(data,save? || group.save? || command.save?) do |output|
+                  printf "### INFO  %10.10s [#%p/%p] STDOUT: %s\n", command.id, ch.local_id, ch.remote_id, output if stdout? || group.stdout? || command.stdout?
+                end
               end
-              ch.on_close do |c|
-                printf  "### INFO: channel #%p/%p closed\n", c.local_id, c.remote_id 
+
+              # STDERR-Channel
+              ch.on_extended_data do |ch, type, data| # "on_extended_data" is called when the process writes something to stderr
+                command.process_raw(data,save? || group.save? || command.save?) do |output|
+                  printf "### INFO  %10.10s [#%p/%p] STDERR#%p: %s\n", command.id, ch.local_id, ch.remote_id, type, output if stderr? || group.stderr? || command.stderr?
+                end
+              end
+              
+              ch.on_close do |ch|
+                printf "### DEBUG %10.10s [#%p/%p] FINISHED. %s received: %d\n", command.id, ch.local_id, ch.remote_id, command.linesplit? ? "Lines" : "Blocks", command.outputcounter if debug?
               end
             end
           end
-          channel.wait if group.options[:order] == :sequential
+          channel.wait if group.order == :sequential
         end
       end
     end
     
-    def execute
+    def execute_commands
       hostopts = {:verbose => Logger::ERROR}
       hostopts.merge!({:password => password}) unless password.nil? || password.empty? 
       hostargs = [host, username, hostopts]
@@ -89,7 +104,9 @@ module RCommand
   
   
   def rcommand(options={}, &block)
-    Connection.new(options.merge!({}),&block)
+    connection = Connection.new(options.merge!({}),&block)
+    puts connection.to_s  if connection.debug?
+    connection.execute_commands
   end
   
 end

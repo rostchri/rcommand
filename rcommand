@@ -1,0 +1,31 @@
+#!/usr/bin/env ruby
+
+require "rubygems"
+require "bundler/setup"
+require "rcommand"
+
+include RCommand
+
+username      = ARGV[0]
+hostname      = ARGV[1]
+gateway_user  = ARGV[2]
+gateway_host  = ARGV[3]
+
+if username.nil? || hostname.nil?
+   puts "### Usage: #{$0} <username> <hostname> [<gateway>]"
+   exit 1
+else
+   args  = { :host => hostname, :username => username, :debug => true, :stdout => true }
+   args.merge!({ :gateway => {:host => gateway_host, :username => gateway_user} }) unless gateway_user.nil? || gateway_host.nil?
+   rcommand args  do
+      add_group :order => :parallel do
+         add_command :cmdline => "echo 1 && sleep 5 && echo 2" do |line|
+            #printf "TEST: %p\n", line
+         end
+         add_command :cmdline => "hostname && echo 3"
+         add_command :id => :passwd, :cmdline => "cat /etc/passwd" do |line|
+            #printf "passwd: %p\n", line
+         end
+      end
+   end
+end
