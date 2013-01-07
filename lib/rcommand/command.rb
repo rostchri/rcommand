@@ -16,7 +16,6 @@ module RCommand
       @outputcounter = 0
     end
     
-    
     def process_raw(data,save=false, &block)
       if linesplit?
         data.each_line do |line| 
