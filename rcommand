@@ -8,7 +8,7 @@ require 'optparse'
 include RCommand
 
 cmdargs = {
-            :gateway      => nil,
+            :gatewayhost  => nil,
             :gatewayuser  => nil,
             :username     => "root",
             :direct       => false,
@@ -38,19 +38,19 @@ OptionParser.new do |opts|
     cmdargs[:verbose] = true
   end
   
-  opts.on("--progress","Shows various progress-messages on stderr") do |c|
-    cmdargs[:progress] = true
-  end
+  # opts.on("--progress","Shows various progress-messages on stderr") do |c|
+  #   cmdargs[:progress] = true
+  # end
 
   opts.on("--direct","Shows each line of output directly after it arrives") do |c|
     cmdargs[:direct] = true
   end
 
-  opts.on("--stdout","Print output of stdout to stdout") do |c|
+  opts.on("--stdout","Print stdout-output") do |c|
     cmdargs[:stdout] = true
   end
 
-  opts.on("--stderr","Print output of stderr to stdout") do |c|
+  opts.on("--stderr","Print stderr-output") do |c|
     cmdargs[:stderr] = true
   end
   
@@ -58,8 +58,8 @@ OptionParser.new do |opts|
     cmdargs[:username] = s
   end
 
-  opts.on("--gateway <string>","Gateway for ssh-session") do |s|
-    cmdargs[:gateway] = s
+  opts.on("--gatewayhost <string>","Gateway for ssh-session") do |s|
+    cmdargs[:gatewayhost] = s
   end
 
   opts.on("--gatewayuser <string>","Gateway-User for gateway of ssh-session") do |s|
@@ -70,15 +70,15 @@ OptionParser.new do |opts|
     cmdargs[:cmdparallel] = true
   end
   
-  opts.on("--maxthreads <num>","Operate on <num> multiple hosts simultanously") do |t|
+  opts.on("--maxthreads <num>","Operate on <num> multiple hosts simultanously using multiple threads") do |t|
     cmdargs[:maxthreads] = t.to_i
   end
   
-  opts.on("--host h1,h2,...",Array,"Later defined actions will be executed on hosts h1,h2,...") do |a|
+  opts.on("--host h1,h2,...",Array,"Execution of commands on hosts h1,h2,...") do |a|
     cmdargs[:hosts] = a
   end
   
-  opts.on("--hostfile f1,f2,...",Array,"Later defined actions will be executed on hosts in file f1,f2,...") do |file|
+  opts.on("--hostfile f1,f2,...",Array,"Execution of commands on hosts in file f1,f2,...") do |file|
     file.each do |f|
       unless File.exists?(f)
         puts "### ERROR: Hostfile #{f} does not exist"
@@ -101,37 +101,35 @@ OptionParser.new do |opts|
     cmdargs[:args] = a
   end
   
-  
   opts.on("--execute cmd1,cmd2,...",Array,"Execute commands cmd1,cmd2,cmd3,... on remote hosts") do |c|
     cmdargs[:cmds] = c
-    #Host::on_list_do_function(:execute, {:cmd => c, :arg => @@arg , :opt => {:direct => @@opt[:direct] }}, @@opt)
   end
   
 end.parse!
 
 
-#printf "%p\n", cmdargs
 
-if cmdargs[:username].nil? || cmdargs[:hosts].empty?
-   puts "### Usage: #{$0} --help"
-   exit 1
+if cmdargs[:username].nil? || cmdargs[:hosts].empty? || cmdargs[:cmds].empty?
+  puts "### Usage: #{$0} --help"
+  exit 1
 else
-  mutex = Mutex.new # if maxthreads > 1 a mutex is needed for proper stdout-output
+  mutex = Mutex.new # if maxthreads > 1 a mutex is needed for proper output to stdout or stderr
   rcommand :debug => cmdargs[:verbose], :maxthreads => cmdargs[:maxthreads] do
-     cmdargs[:hosts].each do |hostname|
-       hostargs = {:hostname => hostname, :debug => cmdargs[:verbose], :username => cmdargs[:username], :stdout => cmdargs[:stdout], :stderr => cmdargs[:stderr]}
-       hostargs.merge!(:gateway => {:host => cmdargs[:gateway], :username => cmdargs[:gatewayuser]}) unless cmdargs[:gatewayuser].nil? || cmdargs[:gateway].nil?
-       add_host hostargs do
-         add_group :order => (cmdargs[:cmdparallel] ? :parallel : :sequential) do
-           cmdargs[:cmds].each do |cmd|
-             add_command :cmdline => cmd do |line|
-               mutex.synchronize do
-                 puts "#{hostname}: #{line}"
-               end
-             end
-           end
-         end
-       end
-     end
+    cmdargs[:hosts].each do |hostname|
+      hostopts = {:debug => cmdargs[:verbose], :stdout => cmdargs[:stdout], :stderr => cmdargs[:stderr]}
+      hostopts.merge!(:gateway => {:host => cmdargs[:gatewayhost], :username => cmdargs[:gatewayuser]}) unless cmdargs[:gatewayuser].nil? || cmdargs[:gatewayhost].nil?
+      add_host hostopts do
+        set :username => cmdargs[:username], :hostname => hostname
+        add_group :order => (cmdargs[:cmdparallel] ? :parallel : :sequential) do
+          cmdargs[:cmds].each do |cmd|
+            add_command :cmdline => cmd do |line|
+              mutex.synchronize do
+                puts "#{hostname}: #{line}"
+              end
+            end
+          end
+        end
+      end
+    end
   end
 end
